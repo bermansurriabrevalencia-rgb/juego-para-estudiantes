@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exploradores del Cuerpo Humano - Juego de Emparejar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Fredoka', sans-serif;
+      background: linear-gradient(135deg, #A8EDEA 0%, #FED6E3 100%);
+      min-height: 100vh;
+      user-select: none;
+    }
+
+    /* Animación de carta al girar o presionar */
+    .card-inner {
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    .card:hover .card-inner {
+      transform: translateY(-4px) scale(1.02);
+    }
+
+    .card.selected .card-inner {
+      transform: scale(1.05);
+      border-color: #3B82F6;
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+    }
+
+    .card.matched .card-inner {
+      background-color: #DEF7EC !important;
+      border-color: #31C48D !important;
+      animation: pulse-glow 1s infinite alternate;
+    }
+
+    /* Error Shake Animation */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    /* Bright Glow for matched pairs */
+    @keyframes pulse-glow {
+      0% { box-shadow: 0 0 5px rgba(49, 196, 141, 0.4); }
+      100% { box-shadow: 0 0 18px rgba(49, 196, 141, 0.8); }
+    }
+
+    /* Glassmorphism containers */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+    }
+
+    /* Bounce effect for headers */
+    .bounce-title {
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-between p-4 min-h-screen text-slate-800">
+
+  <!-- Header & Stats Bar -->
+  <header class="w-full max-w-4xl flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+    <div class="text-center md:text-left">
+      <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 tracking-wide bounce-title flex items-center justify-center md:justify-start gap-2">
+        <span>🧠</span> Exploradores del Cuerpo
+      </h1>
+      <p class="text-slate-600 text-sm md:text-base font-medium">¡Conecta cada órgano o parte con su función correspondientes!</p>
+    </div>
+
+    <!-- Stats Panel -->
+    <div class="glass-panel px-6 py-3 rounded-2xl shadow-lg flex items-center gap-6 text-slate-700">
+      <div class="text-center">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-bold block">Tiempo</span>
+        <span id="timer" class="text-2xl font-bold text-amber-500">00:00</span>
+      </div>
+      <div class="h-8 w-0.5 bg-slate-200"></div>
+      <div class="text-center">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-bold block">Intentos</span>
+        <span id="moves" class="text-2xl font-bold text-indigo-500">0</span>
+      </div>
+      <div class="h-8 w-0.5 bg-slate-200"></div>
+      <div class="text-center">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-bold block">Aciertos</span>
+        <span id="matches" class="text-2xl font-bold text-emerald-500">0/8</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sound Control Button -->
+  <button id="soundToggle" onclick="toggleSound()" class="fixed top-4 right-4 z-40 bg-white/80 backdrop-blur p-3 rounded-full shadow-md hover:bg-white transition text-xl" title="Activar/Desactivar Sonido">
+    🔊
+  </button>
+
+  <!-- Main Game Board Grid -->
+  <main class="w-full max-w-5xl my-auto">
+    <div id="gameGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 p-2">
+      <!-- Tarjetas renderizadas con JavaScript -->
+    </div>
+  </main>
+
+  <!-- Footer Info -->
+  <footer class="mt-6 text-center text-xs text-slate-500 font-medium">
+    Aprende jugando • Partes y Funciones del Cuerpo Humano
+  </footer>
+
+  <!-- Modal de Felicitación / Fin de Juego -->
+  <div id="winModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl text-center transform scale-95 transition-transform duration-300 glass-panel border-4 border-emerald-300" id="modalCard">
+      <div class="text-6xl mb-2 animate-bounce">🏆</div>
+      <h2 class="text-3xl font-extrabold text-indigo-600 mb-1">¡Súper Trabajo!</h2>
+      <p class="text-slate-600 font-medium mb-4">Has completado todos los emparejamientos del cuerpo humano.</p>
+
+      <!-- Rating Stars -->
+      <div id="starsContainer" class="flex justify-center gap-2 text-4xl mb-4 text-amber-400">
+        ★ ★ ★
+      </div>
+
+      <!-- Final Stats -->
+      <div class="bg-indigo-50/80 rounded-2xl p-4 mb-6 flex justify-around text-slate-700">
+        <div>
+          <span class="block text-xs font-semibold uppercase text-slate-400">Tiempo Total</span>
+          <span id="finalTime" class="text-xl font-bold text-indigo-600">00:00</span>
+        </div>
+        <div class="w-0.5 bg-indigo-100"></div>
+        <div>
+          <span class="block text-xs font-semibold uppercase text-slate-400">Intentos</span>
+          <span id="finalMoves" class="text-xl font-bold text-indigo-600">0</span>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button onclick="restartGame()" class="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transform active:scale-95 transition-all">
+        🔄 Jugar de Nuevo
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- DATOS DEL JUEGO (Conceptos de Partes del Cuerpo) ---
+    const bodyPartsData = [
+      { id: 'corazon', type: 'part', title: 'Corazón', icon: '🫀', desc: 'Órgano vital' },
+      { id: 'corazon', type: 'func', title: 'Bombea sangre', icon: '💓', desc: 'Envía sangre a todo el cuerpo' },
+      
+      { id: 'cerebro', type: 'part', title: 'Cerebro', icon: '🧠', desc: 'Centro de mando' },
+      { id: 'cerebro', type: 'func', title: 'Controla el cuerpo', icon: '💡', desc: 'Procesa pensamientos y emociones' },
+      
+      { id: 'pulmones', type: 'part', title: 'Pulmones', icon: '🫁', desc: 'Sistema respiratorio' },
+      { id: 'pulmones', type: 'func', title: 'Absorben oxígeno', icon: '🌬️', desc: 'Nos permiten respirar aire fresco' },
+      
+      { id: 'estomago', type: 'part', title: 'Estómago', icon: '🥣', desc: 'Sistema digestivo' },
+      { id: 'estomago', type: 'func', title: 'Digiere alimentos', icon: '🍎', desc: 'Transforma la comida en energía' },
+      
+      { id: 'huesos', type: 'part', title: 'Esqueleto', icon: '🦴', desc: 'Estructura ósea' },
+      { id: 'huesos', type: 'func', title: 'Sostienen el cuerpo', icon: '🧍', desc: 'Dan forma y protegen órganos' },
+      
+      { id: 'musculos', type: 'part', title: 'Músculos', icon: '💪', desc: 'Tejidos motores' },
+      { id: 'musculos', type: 'func', title: 'Permiten movernos', icon: '🏃', desc: 'Nos ayudan a correr y saltar' },
+      
+      { id: 'ojos', type: 'part', title: 'Ojos', icon: '👁️', desc: 'Sentido de la vista' },
+      { id: 'ojos', type: 'func', title: 'Nos dejan ver', icon: '🎨', desc: 'Captan la luz y los colores' },
+      
+      { id: 'oidos', type: 'part', title: 'Oídos', icon: '👂', desc: 'Sentido del oído' },
+      { id: 'oidos', type: 'func', title: 'Escuchan sonidos', icon: '🎵', desc: 'Perciben música y ruidos' }
+    ];
+
+    // --- VARIABLES DE ESTADO ---
+    let cards = [];
+    let selectedCards = [];
+    let moves = 0;
+    let matchedPairs = 0;
+    let timerInterval = null;
+    let secondsElapsed = 0;
+    let isGameActive = false;
+    let soundEnabled = true;
+
+    // --- WEB AUDIO API (Sintetizador de Sonidos integrados) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'select') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'match') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'error') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.setValueAtTime(180, now + 0.1);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'win') {
+        // Melodía corta triunfal
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, index) => {
+          const noteOsc = audioCtx.createOscillator();
+          const noteGain = audioCtx.createGain();
+          noteOsc.connect(noteGain);
+          noteGain.connect(audioCtx.destination);
+
+          const noteTime = now + index * 0.12;
+          noteOsc.type = 'triangle';
+          noteOsc.frequency.setValueAtTime(freq, noteTime);
+          noteGain.gain.setValueAtTime(0.2, noteTime);
+          noteGain.gain.linearRampToValueAtTime(0, noteTime + 0.2);
+
+          noteOsc.start(noteTime);
+          noteOsc.stop(noteTime + 0.2);
+        });
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('soundToggle');
+      btn.textContent = soundEnabled ? '🔊' : '🔇';
+    }
+
+    // --- INICIALIZACIÓN Y MEZCLA ---
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function initGame() {
+      const grid = document.getElementById('gameGrid');
+      grid.innerHTML = '';
+      
+      // Reset variables
+      cards = shuffle(bodyPartsData);
+      selectedCards = [];
+      moves = 0;
+      matchedPairs = 0;
+      secondsElapsed = 0;
+      isGameActive = false;
+
+      document.getElementById('moves').textContent = '0';
+      document.getElementById('matches').textContent = `0/${bodyPartsData.length / 2}`;
+      document.getElementById('timer').textContent = '00:00';
+      clearInterval(timerInterval);
+
+      // Render cards
+      cards.forEach((data, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'card cursor-pointer h-28 sm:h-32 md:h-36 w-full';
+        cardEl.dataset.index = index;
+        cardEl.dataset.id = data.id;
+
+        const isConcept = data.type === 'part';
+        const badgeColor = isConcept ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
+        const badgeLabel = isConcept ? 'Parte' : 'Función';
+
+        cardEl.innerHTML = `
+          <div class="card-inner w-full h-full glass-panel rounded-2xl p-2 md:p-3 flex flex-col justify-between items-center text-center border-2 border-white shadow-md hover:shadow-lg transition-all">
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}">
+              ${badgeLabel}
+            </span>
+            <div class="text-2xl sm:text-3xl md:text-4xl my-1">${data.icon}</div>
+            <div>
+              <h3 class="font-bold text-xs sm:text-sm md:text-base text-slate-800 leading-tight">${data.title}</h3>
+              <p class="text-[10px] sm:text-xs text-slate-500 line-clamp-1 hidden sm:block">${data.desc}</p>
+            </div>
+          </div>
+        `;
+
+        cardEl.addEventListener('click', () => handleCardClick(cardEl, data, index));
+        grid.appendChild(cardEl);
+      });
+    }
+
+    // --- TEMPORIZADOR ---
+    function startTimer() {
+      if (isGameActive) return;
+      isGameActive = true;
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const mins = Math.floor(secondsElapsed / 60).toString().padStart(2, '0');
+        const secs = (secondsElapsed % 60).toString().padStart(2, '0');
+        document.getElementById('timer').textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+      isGameActive = false;
+    }
+
+    // --- LÓGICA DE INTERACCIÓN ---
+    function handleCardClick(cardEl, data, index) {
+      if (!isGameActive) startTimer();
+
+      // Ignorar si ya está completada o seleccionada
+      if (cardEl.classList.contains('matched') || cardEl.classList.contains('selected')) {
+        return;
+      }
+
+      // Evitar seleccionar más de 2
+      if (selectedCards.length >= 2) return;
+
+      // Seleccionar tarjeta
+      cardEl.classList.add('selected');
+      playSound('select');
+      selectedCards.push({ cardEl, data, index });
+
+      if (selectedCards.length === 2) {
+        moves++;
+        document.getElementById('moves').textContent = moves;
+        checkMatch();
+      }
+    }
+
+    function checkMatch() {
+      const [first, second] = selectedCards;
+
+      // Verificar si coinciden ID pero son diferente tipo (no seleccionar exactamente la misma tarjeta)
+      const isSamePair = first.data.id === second.data.id && first.index !== second.index;
+
+      if (isSamePair) {
+        // Acierto
+        setTimeout(() => {
+          playSound('match');
+          first.cardEl.classList.remove('selected');
+          second.cardEl.classList.remove('selected');
+
+          first.cardEl.classList.add('matched');
+          second.cardEl.classList.add('matched');
+
+          matchedPairs++;
+          document.getElementById('matches').textContent = `${matchedPairs}/${bodyPartsData.length / 2}`;
+
+          selectedCards = [];
+
+          // Comprobar fin del juego
+          if (matchedPairs === bodyPartsData.length / 2) {
+            handleGameWin();
+          }
+        }, 300);
+      } else {
+        // Error
+        setTimeout(() => {
+          playSound('error');
+          first.cardEl.classList.add('shake');
+          second.cardEl.classList.add('shake');
+
+          setTimeout(() => {
+            first.cardEl.classList.remove('selected', 'shake');
+            second.cardEl.classList.remove('selected', 'shake');
+            selectedCards = [];
+          }, 500);
+        }, 400);
+      }
+    }
+
+    // --- LÓGICA DE VICTORIA Y RECOMPENSA ---
+    function handleGameWin() {
+      stopTimer();
+      playSound('win');
+
+      // Lanzar Confeti
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }
+
+      // Calcular Estrellas según eficiencia
+      const totalPairs = bodyPartsData.length / 2;
+      let stars = '★ ★ ★';
+      if (moves > totalPairs * 2) {
+        stars = '★ ★ ☆';
+      } else if (moves > totalPairs * 2.8) {
+        stars = '★ ☆ ☆';
+      }
+
+      // Mostrar modal tras una pequeña pausa
+      setTimeout(() => {
+        document.getElementById('finalTime').textContent = document.getElementById('timer').textContent;
+        document.getElementById('finalMoves').textContent = moves;
+        document.getElementById('starsContainer').textContent = stars;
+
+        const modal = document.getElementById('winModal');
+        const modalCard = document.getElementById('modalCard');
+
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+          modal.classList.remove('opacity-0');
+          modalCard.classList.remove('scale-95');
+          modalCard.classList.add('scale-100');
+        }, 10);
+      }, 600);
+    }
+
+    function restartGame() {
+      const modal = document.getElementById('winModal');
+      const modalCard = document.getElementById('modalCard');
+
+      modal.classList.add('opacity-0');
+      modalCard.classList.remove('scale-100');
+      modalCard.classList.add('scale-95');
+
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        initGame();
+      }, 300);
+    }
+
+    // Inicialización al cargar la página
+    window.onload = () => {
+      initGame();
+    };
+  </script>
+</body>
+</html>
